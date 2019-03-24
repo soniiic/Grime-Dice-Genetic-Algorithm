@@ -6,6 +6,8 @@
 
     internal class Game : List<Die>
     {
+        private bool isDraw;
+        public bool HasDraw { get; private set; }
         public float Fitness { get; private set; }
 
         public float[] SingleBattleScores { get; } = new float[Global.NUMBER_OF_DICE];
@@ -18,9 +20,25 @@
             Fitness = Enumerable.Range(0, Global.NUMBER_OF_DICE).AsParallel().Sum(i =>
             {
                 var singleBattleScore = TestSingleBattleScore(i);
+                if (float.IsNaN(singleBattleScore))
+                {
+                    return 0;
+                }
                 var doubleBattleScore = TestDoubleBattleScore(i);
+                if (float.IsNaN(doubleBattleScore))
+                {
+                    return 0;
+                }
                 var crossBattleScore = TestCrossBattleScore(i);
+                if (float.IsNaN(crossBattleScore))
+                {
+                    return 0;
+                }
                 var crossDoubleBattleScore = TestDoubleCrossBattleScore(i);
+                if (float.IsNaN(crossDoubleBattleScore))
+                {
+                    return 0;
+                }
                 return singleBattleScore + doubleBattleScore + crossBattleScore + crossDoubleBattleScore;
             });
 
@@ -45,16 +63,22 @@
                     }
                     else if (die1Side == die2Side)
                     {
+                        this.HasDraw = true;
                         draws++;
                     }
                 }
             }
 
-            var battleScore = (float)wins / (36 - draws) * 100.0f;
-            SingleBattleScores[i] = battleScore;
+            SingleBattleScores[i] = ((float)wins) / (36) * 100.0f; ;
+            return CalculateFitness(wins, 36, draws);
+        }
 
-            battleScore += (Math.Min(battleScore, 50)) * 2;
-            return battleScore;
+        private static float CalculateFitness(int wins, int totalThrows, int draws)
+        {
+            var fitness = ((float) wins) / totalThrows * 100.0f;
+            fitness = (Math.Min(fitness, 50));
+            fitness -= ((float) draws) / (totalThrows) * 100.0f * 1.25f;
+            return fitness;
         }
 
         private float TestDoubleBattleScore(int i)
@@ -65,31 +89,21 @@
             var draws = 0;
 
             foreach (var die1Side1 in die1.Sides)
-            foreach (var die1Side2 in die1.Sides)
-            foreach (var die2Side1 in die2.Sides)
-            foreach (var die2Side2 in die2.Sides)
-            {
-                if (die1Side1 + die1Side2 > die2Side1 + die2Side2)
-                    wins++;
-                else if (die1Side1 + die1Side2 == die2Side1 + die2Side2)
-                {
-                    draws++;
-                }
-            }
+                foreach (var die1Side2 in die1.Sides)
+                    foreach (var die2Side1 in die2.Sides)
+                        foreach (var die2Side2 in die2.Sides)
+                        {
+                            if (die1Side1 + die1Side2 > die2Side1 + die2Side2)
+                                wins++;
+                            else if (die1Side1 + die1Side2 == die2Side1 + die2Side2)
+                            {
+                                this.HasDraw = true;
+                                draws++;
+                            }
+                        }
 
-            //for (int battleNumber = 0; battleNumber < Global.ROLLS_TO_TEST_FITNESS; battleNumber++)
-            //{
-            //    if (die1.Sides[random.Next(6)] + die1.Sides[random.Next(6)] > die2.Sides[random.Next(6)] + die2.Sides[random.Next(6)])
-            //    {
-            //        wins++;
-            //    }
-            //}
-
-            var battleScore = (float)wins / (1296 - draws) * 100.0f;
-            DoubleBattleScores[i] = battleScore;
-
-            battleScore += (Math.Min(battleScore, 50)) * 2;
-            return battleScore;
+            DoubleBattleScores[i] = ((float)wins) / (1296) * 100.0f;
+            return CalculateFitness(wins, 1296, draws);
         }
 
         private float TestCrossBattleScore(int i)
@@ -109,15 +123,14 @@
                     }
                     else if (die1Side == die2Side)
                     {
+                        this.HasDraw = true;
                         draws++;
                     }
                 }
             }
 
-            var battleScore = (float)wins / (36 - draws) * 100.0f;
-            CrossBattleScores[i] = battleScore;
-            battleScore += (Math.Min(battleScore, 50)) * 2;
-            return battleScore;
+            CrossBattleScores[i] = ((float)wins) / (36) * 100.0f;
+            return CalculateFitness(wins, 36, draws);
         }
 
         private float TestDoubleCrossBattleScore(int i)
@@ -128,31 +141,21 @@
             var draws = 0;
 
             foreach (var die1Side1 in die1.Sides)
-            foreach (var die1Side2 in die1.Sides)
-            foreach (var die2Side1 in die2.Sides)
-            foreach (var die2Side2 in die2.Sides)
-            {
-                if (die1Side1 + die1Side2 > die2Side1 + die2Side2)
-                    wins++;
-                else if (die1Side1 + die1Side2 == die2Side1 + die2Side2)
-                {
-                    draws++;
-                }
-            }
+                foreach (var die1Side2 in die1.Sides)
+                    foreach (var die2Side1 in die2.Sides)
+                        foreach (var die2Side2 in die2.Sides)
+                        {
+                            if (die1Side1 + die1Side2 > die2Side1 + die2Side2)
+                                wins++;
+                            else if (die1Side1 + die1Side2 == die2Side1 + die2Side2)
+                            {
+                                this.HasDraw = true;
+                                draws++;
+                            }
+                        }
 
-            //for (int battleNumber = 0; battleNumber < Global.ROLLS_TO_TEST_FITNESS; battleNumber++)
-            //{
-            //    if (die1[random.Next(6)] + die1[random.Next(6)] > die2[random.Next(6)] + die2[random.Next(6)])
-            //    {
-            //        wins++;
-            //    }
-            //}
-
-            var battleScore = (float)wins / (1296 - draws) * 100.0f;
-            DoubleCrossBattleScores[i] = battleScore;
-
-            battleScore += (Math.Min(battleScore, 50)) * 2;
-            return battleScore;
+            DoubleCrossBattleScores[i] = ((float)wins) / (1296) * 100.0f; ;
+            return CalculateFitness(wins, 1296, draws);
         }
 
         public static Game FromRandom()

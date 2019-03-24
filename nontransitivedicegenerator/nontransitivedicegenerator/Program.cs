@@ -8,6 +8,77 @@ namespace nontransitivedicegenerator
     {
         static void Main(string[] args)
         {
+            GeneticAlgorithm();
+            //BruteForce();
+        }
+
+        private static void BruteForce()
+        {
+            int[] sides = Enumerable.Range(0, 30).Select(_ => 0).ToArray();
+
+            var game = new Game();
+            game.Add(new Die());
+            game.Add(new Die());
+            game.Add(new Die());
+            game.Add(new Die());
+            game.Add(new Die());
+            var sideFocus = 0;
+
+            while (true)
+            {
+                if (sides.All(s => s == 6))
+                {
+                    break;
+                }
+
+                bool found = false;
+                for (int i = 0; i < sideFocus; i++)
+                {
+                    if (sides[i] == 6)
+                    {
+                        for (int j = 0; j < i; j++)
+                        {
+                            sides[j] = 0;
+                        }
+
+                        sides[i] = 0;
+                        sides[i + 1]++;
+                        found = true;
+                        break;
+                    }
+
+                    sides[i]++;
+                    found = true;
+                    break;
+                }
+
+                if (!found)
+                {
+                    sides[sideFocus]++;
+                    if (sides[sideFocus] == 7)
+                    {
+                        sides[sideFocus] = 0;
+                        sideFocus++;
+                        sides = Enumerable.Range(0, 30).Select(_ => 0).ToArray();
+                        sides[sideFocus]++;
+                    }
+                }
+
+                for (int i = 0; i < 30; i++)
+                {
+                    game[i / 6].Sides[i % 6] = sides[i];
+                }
+
+                game.TestFitness();
+
+                Console.WriteLine("f: " + game.Fitness + " s: " + string.Join("", sides));
+            }
+
+            Console.WriteLine("Done");
+        }
+
+        private static void GeneticAlgorithm()
+        {
             while (true)
             {
                 var world = InitialiseGenerationZero(Global.POPULATION_CAP);
@@ -18,12 +89,24 @@ namespace nontransitivedicegenerator
 
                     world = NextGeneration(world);
 
-                    var topGame = world.First(g => g.Fitness == world.Max(g2 => g2.Fitness));
+                    if (i % 50 == 0)
+                    {
+                        var topGame = world.First(g => g.Fitness == world.Max(g2 => g2.Fitness));
+                        Console.ForegroundColor = ConsoleColor.White;
+                        Console.Write($"fitness: {topGame.Fitness}");
 
-                    Console.WriteLine($"fitness: {topGame.Fitness}, SScore: {string.Join(", ", topGame.SingleBattleScores)}, DScore: {string.Join(", ", topGame.DoubleBattleScores)}, CScore: {string.Join(", ", topGame.CrossBattleScores)}, DCScore: { string.Join(", ", topGame.DoubleCrossBattleScores)}");
+                        WriteScores("SScore: ", topGame.SingleBattleScores);
+                        WriteScores("DScore: ", topGame.DoubleBattleScores);
+                        WriteScores("CScore: ", topGame.CrossBattleScores);
+                        WriteScores("DCScore: ", topGame.DoubleCrossBattleScores);
 
-                    var allOver50 = world.FirstOrDefault(g => g.SingleBattleScores.All(s => s > 50) && g.DoubleBattleScores.All(s => s > 50) &&
-                                                                   g.CrossBattleScores.All(s => s > 50) && g.DoubleCrossBattleScores.All(s => s > 50));
+                        Console.WriteLine();
+                    }
+
+                    var allOver50 = world.FirstOrDefault(g =>
+                        !g.HasDraw &&
+                            g.SingleBattleScores.All(s => s > 50) && g.DoubleBattleScores.All(s => s > 50) &&
+                            g.CrossBattleScores.All(s => s > 50) && g.DoubleCrossBattleScores.All(s => s > 50));
                     if (allOver50 != null)
                     {
                         for (var index = 0; index < allOver50.Count; index++)
@@ -31,23 +114,37 @@ namespace nontransitivedicegenerator
                             var die = allOver50[index];
                             Console.WriteLine($"Die: {index} Sides: {string.Join(", ", die.Sides)}");
                         }
+
                         goto end_of_loop;
                     }
                 }
             }
+
             end_of_loop: { }
             Console.WriteLine("Solution Found!");
             Console.ReadLine();
         }
 
+        private static void WriteScores(string name, float[] scores)
+        {
+            Console.WriteLine();
+
+            Console.ForegroundColor = ConsoleColor.White;
+            Console.Write(name);
+            for (var index = 0; index < scores.Length; index++)
+            {
+                var score = scores[index];
+                Console.ForegroundColor = score > 50 ? ConsoleColor.Green : ConsoleColor.Red;
+                Console.Write(score.ToString("N2") + (index == scores.Length - 1 ? "" : ", "));
+            }
+        }
+
         private static World NextGeneration(World world)
         {
             var newWorld = new World();
-            var orderedFitness = world.OrderBy(g => g.Fitness).ToList();
 
             // Add the strong
-            var fitnessOfTop10Percent = orderedFitness.ElementAt((int)(Global.POPULATION_CAP * 0.95)).Fitness;
-            var top5Percent = orderedFitness.Where(g => g.Fitness >= fitnessOfTop10Percent).ToList();
+            var top5Percent = world.OrderByDescending(g => g.Fitness).Take((int)(Global.POPULATION_CAP * 0.05)).ToList();
             newWorld.AddRange(top5Percent);
 
             while (newWorld.Count < Global.POPULATION_CAP)
