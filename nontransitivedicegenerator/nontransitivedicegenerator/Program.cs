@@ -2,12 +2,22 @@
 
 namespace nontransitivedicegenerator
 {
+    using System.Collections.Generic;
+    using System.Diagnostics;
+    using System.IO;
     using System.Linq;
+    using System.Reflection;
+    using ILGPU;
+    using ILGPU.Runtime.CPU;
+    using ILGPU.Runtime.Cuda;
 
     class Program
     {
         static void Main(string[] args)
         {
+            using (Process p = Process.GetCurrentProcess())
+                p.PriorityClass = ProcessPriorityClass.Idle;
+
             GeneticAlgorithm();
             //BruteForce();
         }
@@ -82,18 +92,23 @@ namespace nontransitivedicegenerator
             while (true)
             {
                 var world = InitialiseGenerationZero(Global.POPULATION_CAP);
+                float fitness = Single.NaN;
 
                 for (int i = 0; i < Global.GENERATION_ITERATIONS; i++)
                 {
-                    //Console.WriteLine("Iteration: " + i);
-
                     world = NextGeneration(world);
 
                     if (i % 50 == 0)
                     {
-                        var topGame = world.First(g => g.Fitness == world.Max(g2 => g2.Fitness));
+                        var topFitness = world.Max(g2 => g2.Fitness);
+                        if (topFitness != fitness)
+                        {
+                            i = Math.Min(i, (int) (Global.GENERATION_ITERATIONS * 0.8));
+                            fitness = topFitness;
+                        }
+                        var topGame = world.First(g => g.Fitness == topFitness);
                         Console.ForegroundColor = ConsoleColor.White;
-                        Console.Write($"fitness: {topGame.Fitness}");
+                        Console.Write($"fitness: {topGame.Fitness}, hasDraw: {topGame.HasDraw}");
 
                         WriteScores("SScore: ", topGame.SingleBattleScores);
                         WriteScores("DScore: ", topGame.DoubleBattleScores);
@@ -103,20 +118,33 @@ namespace nontransitivedicegenerator
                         Console.WriteLine();
                     }
 
-                    var allOver50 = world.FirstOrDefault(g =>
-                        !g.HasDraw &&
-                            g.SingleBattleScores.All(s => s > 50) && g.DoubleBattleScores.All(s => s > 50) &&
-                            g.CrossBattleScores.All(s => s > 50) && g.DoubleCrossBattleScores.All(s => s > 50));
-                    if (allOver50 != null)
+                    var successfulGame = world.FirstOrDefault(g => !g.HasDraw && g.Fitness > 1000);
+                    if (successfulGame != null)
                     {
-                        for (var index = 0; index < allOver50.Count; index++)
+                        for (var index = 0; index < successfulGame.Count; index++)
                         {
-                            var die = allOver50[index];
+                            var die = successfulGame[index];
                             Console.WriteLine($"Die: {index} Sides: {string.Join(", ", die.Sides)}");
                         }
 
                         goto end_of_loop;
                     }
+                }
+
+                var closeGame = world.Where(g => !g.HasDraw && g.Fitness > 998).OrderByDescending(g => g.Fitness).FirstOrDefault();
+
+                if (closeGame != null)
+                {
+                    var lines = new List<string>();
+                    lines.Add($"fitness: {closeGame.Fitness}, hasDraw: {closeGame.HasDraw}");
+                    for (var index = 0; index < closeGame.Count; index++)
+                    {
+                        var die = closeGame[index];
+                        lines.Add($"Die: {index} Sides: {string.Join(", ", die.Sides)}");
+                    }
+                    lines.Add(string.Empty);
+
+                    File.AppendAllLines(@"C:\Temp\dicefinds.txt", lines);
                 }
             }
 
